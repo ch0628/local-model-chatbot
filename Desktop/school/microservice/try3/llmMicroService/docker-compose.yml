@@ -1,0 +1,56 @@
+services:
+  api-gateway:
+    image: ironho/api-gateway:latest
+    ports:
+      - "8000:8000"
+    env_file: ./.env
+    networks:
+      - rag-net
+    depends_on:
+      - rag-service
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport sys, urllib.request\ntry:\n    r = urllib.request.urlopen('http://localhost:8000/health', timeout=5)\n    sys.exit(0 if r.getcode()==200 else 1)\nexcept Exception:\n    sys.exit(1)\nPY"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  rag-service:
+    image: ironho/rag-service:latest
+    env_file: ./.env
+    networks:
+      - rag-net
+    depends_on:
+      - vector-db
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport sys, urllib.request\ntry:\n    r = urllib.request.urlopen('http://localhost:8000/health', timeout=5)\n    sys.exit(0 if r.getcode()==200 else 1)\nexcept Exception:\n    sys.exit(1)\nPY"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 120s
+    restart: unless-stopped
+
+  vector-db:
+    image: chromadb/chroma:0.5.20
+    ports:
+      - "8001:8000"
+    environment:
+      - ANONYMIZED_TELEMETRY=FALSE
+    volumes:
+      - chroma_data:/chroma/chroma
+    networks:
+      - rag-net
+    healthcheck:
+      test: ["CMD-SHELL", "python - <<'PY'\nimport sys, urllib.request\ntry:\n    r = urllib.request.urlopen('http://localhost:8000/api/v2/auth/identity', timeout=5)\n    sys.exit(0 if r.getcode()==200 else 1)\nexcept Exception:\n    sys.exit(1)\nPY"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    restart: unless-stopped
+
+networks:
+  rag-net:
+    driver: bridge
+
+volumes:
+  chroma_data:
